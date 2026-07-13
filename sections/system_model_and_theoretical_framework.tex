@@ -1,8 +1,8 @@
 \section{System Model and Theoretical Framework}
 
-The dynamics of the driver and vehicle's surrounding environment in real-time will have to be characterized in order to mathematically model the real-world constraints of operation for traditional vehicle tracking models. Any system deployed on the edge of the car has to contend with latency and processing limitations, making it impractical to stream raw and uncompressed HD video frames or to run large and not optimized spatial temporal deep learning architectures.
+To ground the design in real operating conditions, we first characterize the driver and the machine's surrounding environment as they evolve in real time. On-device deployment inside a moving vehicle comes with hard limits---a tight latency budget and modest compute---and these constraints shape everything that follows. They rule out streaming raw, uncompressed HD frames, and they rule out running heavy spatio-temporal deep networks directly at the edge, which is exactly where traditional vehicle-tracking pipelines fall short.
 
-The Saarthi system models the operator and machine state using localized vision primitives and synchronised telemetry, however. This technique combines all the high frequency information from the video and sensor data into a compact risk feature vector, retaining the essential hazard information including the signature of micro-sleep, blindspot obstructions and axis tilts. This section describes the hazard threat model, the theory behind real-time risk reasoning and the localised telemetry features that will be utilized to identify any imminent operational anomalies.
+SAARTHI takes a different route. It represents the operator and machine state through localized vision primitives paired with synchronized telemetry. This approach compresses the high-frequency video and sensor streams into a compact risk feature vector while preserving the information that actually matters for hazard detection: the signatures of micro-sleep, blind-spot intrusions, and axis tilt. The sections below lay out the hazard threat model, the reasoning behind real-time risk estimation, and the localized telemetry features used to flag imminent operational anomalies.
 
 \begin{table}[htbp]
 \centering
@@ -14,57 +14,52 @@ The Saarthi system models the operator and machine state using localized vision 
 \textbf{Methodology} & \textbf{Hardware Class} & \textbf{Latency} & \textbf{Primary Limitation} \\
 \hline
 \textbf{Cloud-Based Telematics} & Server + Cellular Node & High & Connectivity reliance in remote sites (e.g. mines) \\
-\textbf{Wearable Biosensors} & Smartwatch / EEG Cap & Low & Operator discomfort, Hygiene, Compliance drop-off \\
-\textbf{Heavy Deep Learning} (CNN/ViT) & Edge GPU (Jetson/TPU) & Medium & High computational complexity, Thermal output \\
-\textbf{Basic Machine Thresholds} & Machine ECU & Low & Rigidly generic, Complete lack of behavioral insight \\
-\textbf{SAARTHI} \newline \textbf{(Proposed)} & \textbf{Commodity Edge CPU} & \textbf{Low} & \textbf{Requires 30s initial operator calibration} \\
+\textbf{Wearable Biosensors} & Smartwatch / EEG Cap & Low & Operator discomfort, hygiene, compliance drop-off \\
+\textbf{Heavy Deep Learning} (CNN/ViT) & Edge GPU (Jetson/TPU) & Medium & High computational complexity, thermal output \\
+\textbf{Basic Machine Thresholds} & Machine ECU & Low & Rigidly generic, no behavioral insight \\
+\textbf{SAARTHI (Proposed)} & Commodity Edge CPU & Low & Requires 30 s initial operator calibration \\
 \hline
 \end{tabular}%
 }
 \end{table}
 
-
 \subsection{The Hazard Model}
-
-Threats from industrial environments and vehicles can be broadly classified into two categories based on their visibility and the computational intelligence required for reliable detection.
+Hazards in industrial vehicle environments fall into two broad classes, separated by how visible they are and how much computational reasoning reliable detection demands.
 
 \subsubsection{Type 1: Overt Operational Hazards}
+A Type 1 hazard occurs whenever a physical safety boundary or operational constraint is breached---a pedestrian stepping into a blind spot, an operator letting go of the wheel with both hands, or any incursion into a predefined safety zone. Like conventional rule-based anomaly detection, these events carry clear, observable visual signatures, which makes them deterministic and comparatively straightforward to catch.
 
-Type 1 hazards occur when a physical safety boundary or operational constraint is violated. Examples include a pedestrian entering a vehicle's blind spot, an operator taking both hands off the steering wheel, or any direct violation of predefined safety zones. Similar to conventional rule-based anomaly detection, these hazards exhibit clear and observable visual characteristics, making them deterministic and comparatively easier to detect.
-
-The proposed Saarthi framework identifies such hazards in real time by comparing the object bounding boxes generated by the YOLO object detection model against predefined restricted spatial regions. Whenever an object enters a prohibited operational zone, the system immediately classifies the event as a Type 1 operational hazard and triggers an appropriate safety response.
+SAARTHI detects them in real time by checking the bounding boxes produced by the YOLO detector against predefined restricted regions. The moment an object crosses into a prohibited zone, the system flags a Type 1 hazard and triggers the appropriate safety response.
 
 \subsubsection{Type 2: Covert Micro-behavioral Hazards}
+Type 2 hazards are subtle behavioural or contextual anomalies, and they are far harder to spot. Because they tend to blend into normal operation, simple spatial rules or threshold-based vision cannot isolate them. An operator in the early stages of fatigue, for instance, may sit with an apparently normal posture and open eyes while slowly drifting into reduced alertness. Machine vibration or tilt behaves the same way: each reading may stay within acceptable bounds on its own, yet together the readings point to an abnormal operating state.
 
-Type 2 hazards represent subtle behavioural or contextual anomalies that are significantly more challenging to detect. These hazards often blend with normal operating conditions and therefore cannot be identified using simple spatial rules or threshold-based computer vision techniques. For example, a driver experiencing early-stage fatigue may maintain an apparently normal posture with open eyes while gradually exhibiting behavioural patterns associated with reduced alertness. Similarly, machine vibrations or operational tilts may remain within acceptable ranges individually but collectively indicate abnormal operating conditions.
+Since these situations look almost identical to a safe state on the surface, vision alone is not enough. SAARTHI instead examines the statistical character and temporal evolution of the operator's micro-movements---blink-rate variation, gaze drift, head pose---alongside machine telemetry over time. This deeper behavioural view surfaces latent hazards before they escalate into critical incidents.
 
-Since the visual appearance of these situations closely resembles a safe operational state, conventional computer vision methods alone are insufficient. The proposed Saarthi framework addresses this challenge by analysing the statistical characteristics and temporal evolution of driver micro-movements, including blink rate variation, gaze drift, head pose, and machine telemetry over time. This deeper behavioural analysis enables the identification of latent hazards before they evolve into critical safety incidents.
-
-\subsection{Anomaly Theory in Physiological and Kinematic Sense}
-
-Facial landmark coordinate features are used to model the real-time monitoring of the operator's state in a complex environment on a heavy machine. Eye Aspect Ratio (EAR) is a measure of Eye Openness at a frame. The EAR is given as:
+\subsection{Anomaly Theory in the Physiological and Kinematic Sense}
+We monitor the operator's state in real time using facial-landmark coordinate features. The core primitive is the Eye Aspect Ratio (EAR), a per-frame measure of how open the eyes are:
 \begin{equation}
     EAR = \frac{||p_2 - p_6|| + ||p_3 - p_5||}{2 ||p_1 - p_4||} \label{eq:ear}
 \end{equation}
-Note: $p_i$ represents the 2D position of the eye landmarks.
+Here $p_i$ denotes the 2D position of an eye landmark.
 
-If the sequence is operated by a proper and alert operator under a relatively stable sequence around an open-eye mean $\mu_{alert}$, the blinking caused by the EAR sequence is in the natural level. This distribution is the result of the various natural physiological blinks, head pose changes, and minor changes to the lighting in the environment. So, the eye state of an alert operator is predominantly bell-shaped and symmetric, which leads to the following form of probability density function (pdf).
+For an alert operator, the EAR sequence stays fairly stable around an open-eye mean $\mu_{alert}$, and the fluctuations that do occur---ordinary physiological blinks, small head-pose shifts, minor lighting changes---sit within a natural range. The resulting eye-state distribution is therefore roughly bell-shaped and symmetric.
 
-This framework is based on the idea that Onset Fatigue causes specific non-Gaussian distortions to the physiological data stream:
+The framework rests on a simple premise: the onset of fatigue introduces specific, non-Gaussian distortions into this physiological stream.
+
 \begin{itemize}
-    \item \textbf{Microsleep Artifacts:} The prolonged eye closure is associated with severe drowsy state, exceeding the ``blink window.'' These result in the rapid, brief collapse of the EAR stream (known as PERCLOS) that is not created by physiological blinks that are brief and smooth.
-    \item \textbf{Heavy-Tailed Distributions:} Such long closures result in a skewed/Heavy-Tailed eye-state distribution (with thicker lower tails). The shape of the pdf of the eye opens is altered, with the operator suddenly waking up, and trying to recalibrate to the mean open-eye EAR ($\mu$), however, the shape is now thicker-tailed with the appearance of fatigue artifacts.
+    \item \textbf{Microsleep artifacts.} Prolonged eye closures---the hallmark of severe drowsiness---extend well beyond the normal blink window. They appear as rapid collapses in the EAR stream, the phenomenon the PERCLOS metric is designed to quantify, and they look nothing like the smooth, brief dip of an ordinary blink.
+    \item \textbf{Heavy-tailed distributions.} These long closures skew the eye-state distribution and thicken its lower tail. As the operator jerks awake and tries to recover the open-eye mean $\mu$, the distribution no longer looks symmetric---its heavier tail is the statistical fingerprint of fatigue.
 \end{itemize}
 
-Meanwhile, \textbf{Kinematic Anomalies} (e.g., rollover risk, blind-spot intrusion) are simulated dynamically using machine telemetry and spatial bounding boxes. If the machine speed $v$ is not zero and the tilt angle $\theta$ exceeds a safety set-point $\theta_{crit}$, then the safety interventions are deterministic and not in accordance with the standard behavioral policies, that is, the Tier-1 safety interventions are triggered.
+Kinematic anomalies---rollover risk, blind-spot intrusion---are handled on a separate track, driven by machine telemetry and spatial bounding boxes. When the machine is moving ($v \neq 0$) and the tilt angle $\theta$ exceeds a critical set-point $\theta_{crit}$, the response is deterministic rather than behavioural: a Tier-1 safety intervention fires immediately, independent of the standard behavioural policies.
 
 \subsection{Mathematical Formalization of Features}
-
-To capture these physiological anomalies, the system extracts a feature vector $\mathbf{x}$ from a sliding temporal window $W = \{e_1, e_2, \dots, e_w\}$ of raw EAR samples. Table \ref{tab:math_notation} defines the mathematical notation used throughout this derivation.
+To turn these physiological cues into something a classifier can act on, the system extracts a feature vector $\mathbf{x}$ from a sliding temporal window $W = \{e_1, e_2, \dots, e_w\}$ of raw EAR samples. Table \ref{tab:math_notation} lists the notation used throughout the derivation.
 
 \begin{table}[htbp]
 \centering
-\caption{Mathematical notations and definitions. These symbols define the statistical moments used to construct the feature vector $\mathbf{x}$, mapping raw physiological data to the decision space.}
+\caption{Mathematical notations and definitions. \textit{These symbols define the statistical moments used to construct the feature vector $\mathbf{x}$, mapping raw physiological data into the decision space.}}
 \label{tab:math_notation}
 \resizebox{\columnwidth}{!}{%
 \begin{tabular}{cl}
@@ -73,51 +68,51 @@ To capture these physiological anomalies, the system extracts a feature vector $
 \hline
 $W$ & Sliding temporal window of size $w$ \\
 $e_i$ & Individual EAR sample at frame $i$ \\
-$\mu$ & Mean EAR (First Moment) \\
-$\sigma$ & Standard Deviation (Second Moment) \\
-$S_k$ & Skewness (Third Standardized Moment) \\
-$K_u$ & Excess Kurtosis (Fourth Standardized Moment) \\
-$E_{roc}$ & EAR Rate of Change \\
-$\Phi(\mathbf{x})$ & Non-linear mapping function to the XGBoost feature space \\
+$\mu$ & Mean EAR (first moment) \\
+$\sigma$ & Standard deviation (second moment) \\
+$S_k$ & Skewness (third standardized moment) \\
+$K_u$ & Excess kurtosis (fourth standardized moment) \\
+$E_{roc}$ & EAR rate of change \\
+$\Phi(\mathbf{x})$ & Non-linear mapping to the XGBoost feature space \\
 \hline
 \end{tabular}%
 }
 \end{table}
 
 \subsubsection{Skewness ($S_k$)}
-A measure of the asymmetry of the distribution of the physiological signal. The eye openness distribution for an alert operator is usually relatively symmetric as a function of time ($S_k \approx 0$). As the operator gets tired, however, he or she becomes prone to Micro-Sleeps and long eye closures. This causes the EAR values to bias heavily towards the lower end (closed eyes), creating a non-symmetric lower tail.
+Skewness measures the asymmetry of the signal's distribution. For an alert operator the eye-openness distribution stays close to symmetric over time ($S_k \approx 0$). As fatigue sets in, micro-sleeps and long closures pull the EAR values toward the low, closed-eye end, producing an asymmetric lower tail.
 \begin{equation}
     S_k = \frac{\frac{1}{w} \sum_{i=1}^w (e_i - \mu)^3}{\left(\frac{1}{w} \sum_{i=1}^w (e_i - \mu)^2\right)^{3/2}}
 \end{equation}
 
 \subsubsection{Kurtosis ($K_u$)}
-Kurtosis serves as a primary discriminator for detecting profound drowsiness events. It measures the tailedness of the distribution.
+Kurtosis is the framework's primary discriminator for deep drowsiness. It measures the tailedness of the distribution:
 \begin{equation}
     K_u = \frac{\frac{1}{w} \sum_{i=1}^w (e_i - \mu)^4}{\left(\frac{1}{w} \sum_{i=1}^w (e_i - \mu)^2\right)^2} - 3
 \end{equation}
-The value 3 is subtracted to calculate Excess Kurtosis, normalizing the result against a standard Normal distribution. Values far removed from 0 suggest outliers that are compatible with microsleep episodes, as opposed to physiological blinking.
+Subtracting 3 yields excess kurtosis, normalized against a standard normal distribution. Values far from 0 flag the kind of outliers consistent with microsleep episodes rather than ordinary blinking.
 
 \subsubsection{EAR Rate of Change ($E_{roc}$)}
-The EAR Rate of Change ($E_{roc}$) is used to detect the dynamics of rapid physiological changes typical of fatigue transitions such as sudden jerks awake or rapid head drops:
+The EAR rate of change captures the fast transitions typical of a fatigue episode---a sudden jerk awake, a rapid head drop:
 \begin{equation}
     |E_{roc}| = |e_t - e_{t-k}|
 \end{equation}
-with $k = 5$ indicating the step stride used to capture multi-frame displacement. High values of $|E_{roc}|$ means the eye snap is rapid or that there are sudden physiological changes that are not normally observed in calm, alert operation, where the physiological state changes slowly over time.
+Here $k = 5$ sets the stride, measuring displacement across several frames. A large $|E_{roc}|$ signals a rapid eye snap or an abrupt physiological shift---motion you rarely see in calm, alert operation, where the state drifts slowly.
 
 \begin{table}[htbp]
 \centering
-\caption{Sensitivity analysis of the features. Each feature corresponds to a particular type of anomaly; Mean EAR provides physiological background information, while Kurtosis and Skewness detect the non-Gaussian features characteristic of onset fatigue.}
+\caption{Sensitivity analysis of the features. \textit{Each feature maps to a particular type of anomaly. Mean EAR supplies physiological background, while kurtosis and skewness pick up the non-Gaussian behaviour that characterizes the onset of fatigue.}}
 \label{tab:feature_sensitivity}
 \resizebox{\columnwidth}{!}{%
 \begin{tabular}{p{2.5cm} p{2.5cm} p{3.5cm}}
 \hline
 \textbf{Feature} & \textbf{Physiological Meaning} & \textbf{Detection Function} \\
 \hline
-\textbf{Mean EAR ($\mu$)} & Baseline Openness & Establishes the mean of the EAR function to provide physiological background context. \\
-\textbf{Std. Dev. ($\sigma$)} & Blink Volatility & \textbf{Stability Check:} High variance means that the blinking is erratic or the head pose is unstable. \\
-\textbf{Kurtosis ($K_u$)} & Drowsiness Burstiness & \textbf{Primary Discriminator:} Detects profound micro-sleeps. The longer the closures, the higher the Kurtosis. \\
-\textbf{Skewness ($S_k$)} & Distribution Symmetry & \textbf{Fatigue Artifacts:} Looks for asymmetry in the distribution, which identifies a closed-eye bias. \\
-\textbf{Rate of Change ($E_{roc}$)} & Physiological Velocity & Identifies rapid changes in eye movement or sudden head drops. \\
+\textbf{Mean EAR ($\mu$)} & Baseline openness & Establishes the EAR baseline, providing physiological context. \\
+\textbf{Std. dev. ($\sigma$)} & Blink volatility & Stability check: high variance flags erratic blinking or an unstable head pose. \\
+\textbf{Kurtosis ($K_u$)} & Drowsiness burstiness & Primary discriminator: detects deep micro-sleeps; longer closures raise kurtosis. \\
+\textbf{Skewness ($S_k$)} & Distribution symmetry & Fatigue artifacts: detects the closed-eye asymmetry in the distribution. \\
+\textbf{Rate of change ($E_{roc}$)} & Physiological velocity & Flags rapid eye movements or sudden head drops. \\
 \hline
 \end{tabular}%
 }
@@ -132,4 +127,3 @@ This paper defines Real-Time in the context of Operator Safety as:
 \end{equation}
 
 The data collection time ($T_{\text{feature\_window}}$) is not the critical metric, but rather the Inference Latency ($T_{\text{inference}}$) is the critical metric for Real-Time in the context of Operator Safety. The continuous feature extraction window is implemented with a moving buffer. When a Critical Fatigue event occurs, or when an operator shows signs of Critical Fatigue, a verdict should be available from the Hybrid Decision Engine ($T_{\text{hazard\_onset}}$). With a considerably lower algorithmic processing time for the inference (milliseconds) compared to the time it takes the human to react in order to prevent an accident ($T_{\text{human}}$), the system can issue a customised warning earlier. To avoid this decision logic becoming the performance obstacle, SAARTHI will reduce $T_{\text{inference}}$ by using lightweight models optimized for the edge.
-
