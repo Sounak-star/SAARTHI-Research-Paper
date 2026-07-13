@@ -1,3 +1,44 @@
 \section{Related Work}
+Securing heavy-machinery operations sits at the intersection of computer vision, physiological monitoring, and adaptive decision-making. Broader surveys of industrial safety still tend to focus on rule-based alarms and single-sensor approaches, and even where hybrid deep learning architectures have made real progress on driver drowsiness detection in automotive settings, they are built around a single modality. That assumption breaks down on a construction site, a mine, or a factory floor, where operators differ widely in experience and ability and hazards rarely show up one at a time. This section works through that prior literature and situates the design choices behind SAARTHI against it.
 
-Write the related work here.
+\subsection{Threshold-Based and Infrastructure-Centric Safety Systems}
+Most collision-prevention systems on active worksites still come down to proximity alarms and geofencing: fixed ultrasonic or radar sensors mounted on the machine, scanning continuously and comparing whatever they detect against a static, manually set threshold, with no regard for who's actually operating the machine. In practice, those fixed thresholds tend to misfire constantly on busy sites, where workers and equipment are always moving through the sensor's range. Worse, the same threshold gets applied to every operator regardless of experience or physical ability, so an experienced operator ends up tuning out the alarms while a newer one may not get warned early enough.
+
+Newer cabin-integrated systems have brought computer vision into the mix, using object detection to pick out workers, vehicles, and structural hazards around the machine, and drawing on signals like facial landmark drift, eyelid closure, or chassis tilt to flag unsafe states. But most of these still work in isolation. A camera watching for fatigue has no idea there's a person standing in the machine's blind spot, and a proximity sensor has no way of knowing the operator is falling asleep. Because these hazards arise from genuinely different physical processes, no single detector is well positioned to catch all of them---which is really the argument for fusing several lightweight signals rather than trying to build one model that does everything.
+
+Conventional alarm-based systems, built for fairly controlled, homogeneous environments, don't hold up well once the operator population and the worksite itself become this varied.
+\begin{itemize}
+    \item \textbf{Rigidity and operator homogeneity.} A fixed-threshold system treats every operator identically, regardless of experience, sensory ability, or fatigue tolerance. In practice that means the same threshold that produces alarm fatigue in a veteran operator will under-warn someone newer to the job---there's no way to individualize the safeguard without changing the underlying logic entirely.
+    \item \textbf{Deployment complexity and accessibility gaps.} Combining vision, physiological, and environmental sensing into one cabin system is already a nontrivial integration problem, and most existing architectures weren't designed with that convergence in mind. Accessibility tends to be an afterthought too: operators with hearing or visual impairments are rarely considered when alert delivery is designed almost exclusively around audio cues.
+\end{itemize}
+
+\subsection{Fatigue-Centric and Vision-Based Defenses}
+A separate line of work moves detection logic onto the operator's own physiological state rather than the surrounding environment. Here the typical approach is a camera-based agent watching the driver's face---tracking eye-aspect-ratio, yawning frequency, head pose---to infer drowsiness before it becomes dangerous.
+
+These systems are reasonably good at what they do, but that's also their limitation: they know almost nothing about what's happening outside the cabin. A fatigue detector can't tell you there's a worker nearby, or that the terrain has become unstable, or that the machine itself is tilting toward a rollover. It's built to catch one kind of hazard and stays blind to the rest.
+\begin{itemize}
+    \item \textbf{Modality opacity.} Vision-only systems generally ignore machine-state telemetry altogether, even though rollover risk from chassis inclination is well documented in the tilt-sensing literature. A fatigue model has no access to that data by design, so it simply can't detect a compound hazard---drowsiness plus instability, say---even when both are present at once.
+    \item \textbf{The context gap.} These tools are built around a single-hazard focus and stay that way in deployment. They fire only on drowsiness cues, missing nearby obstacles or unstable ground entirely. By the time a purely fatigue-driven alert goes off, the operator may already be in a situation involving more than just tiredness.
+\end{itemize}
+
+\subsection{Machine Learning in Industrial Safety}
+As static, rule-based systems have repeatedly failed to keep up with a workforce this varied in experience and accessibility needs, machine learning has become the default approach for adaptive intervention.
+
+\subsubsection{Deep Learning and Object Detection Models}
+Deep learning dominates recent work in this space. YOLO-based detectors, for instance, perform well in real time for identifying blind-spot obstacles and nearby workers. On the physiological side, convolutional facial-landmark models track eye and head movement continuously to catch fatigue before it becomes critical, and gradient-boosted models like XGBoost have proven useful for context-aware risk scoring, weighing environmental and operational variables against historical incident records.
+
+The catch is that these models are almost always deployed as separate pipelines. Nobody is fusing their outputs into one coherent decision---which leaves a human supervisor to piece together several unrelated alerts in real time.
+\begin{itemize}
+    \item \textbf{Fragmented decision-making.} Running fatigue, obstacle, and tilt detection as three independent systems means a supervisor has to mentally combine uncorrelated alerts on the fly. That adds real cognitive load, slows reaction time, and raises the odds that a compound hazard slips through unnoticed.
+    \item \textbf{Static intervention policy.} Even where detection is sophisticated, the response usually isn't: cabins tend to issue the same alert regardless of context, which is exactly the kind of rigid logic an adaptive, constraint-respecting policy is meant to replace.
+\end{itemize}
+
+\subsubsection{Lightweight Rule-Based Models}
+Some practitioners have gone the other direction, relying on fixed-weight scoring rules or manually curated alert matrices instead. These are cheap to implement and integrate easily into legacy cabin electronics, which is a real advantage.
+
+The tradeoff is that manual thresholds don't adapt well to individual variation---different operator experience levels, different accessibility needs, changing site conditions. Keeping thresholds current across a large fleet turns into an ongoing manual calibration problem, which doesn't scale. Reinforcement learning offers a way around this, letting a system learn its own intervention policy while staying inside predefined safety bounds, though getting RL to behave safely and explainably in a live industrial setting is still an open problem---earlier work has shown that unconstrained policy learners can behave unpredictably during exploration, especially when safety constraints aren't built into training from the start.
+
+\subsection{The Gap Analysis}
+Taken together, the literature points to a fairly clear gap: nobody has really combined multiple hazard-detection modalities, adaptive decision-making, explainability, and operator-specific accessibility into one system. Most work picks one of these and pushes it further, while the others---particularly personalization---stay largely unaddressed.
+
+SAARTHI is built around closing that specific gap. It fuses fatigue, blind-spot, tilt, and contextual risk signals into a single Reinforcement Learning policy operating under safety constraints, giving it the kind of adaptive intervention selection that has mostly been left to human judgment after the fact, while keeping the decision process explainable enough for safety-critical use. Rather than treating accessibility as something bolted on afterward, operator-specific delivery preferences are built directly into the Hybrid Decision Engine---so the same underlying risk score can reach an operator through haptic, visual, or audio channels depending on what they actually need, without changing the safety guarantees behind the decision itself.

@@ -1,3 +1,20 @@
-\section{Conclusion}
+\section{Conclusion and Future Work}
+This paper introduced SAARTHI, a personalized AI safety copilot for heavy-machinery operators facing multi-hazard industrial risks. Moving away from the siloed, rule-based alarms that dominate the field, the system fuses hazard detection into a single Hybrid Decision Engine governed by a constrained Reinforcement Learning policy---an approach that tries to reconcile consistent safety enforcement with the fact that no two operators have quite the same needs.
 
-Write the conclusion here.
+\subsection{Summary of Contributions}
+Three things stand out from the design and integration of the system.
+
+\begin{itemize}
+    \item \textbf{Multi-modal risk fusion.} Combining fatigue, blind-spot, tilt, and contextual risk signals into one real-time safety score captures compound hazards that any single detector would miss on its own. The individual detectors supply the sensory groundwork, but it's the fusion logic in the Hybrid Decision Engine that actually decides when intervention is warranted.
+    \item \textbf{Balancing safety and personalization.} The PPO-based policy weighs predefined safety constraints against operator-specific delivery preferences, choosing interventions based on accessibility needs, experience level, and stated alert preferences. That's a meaningfully different approach from the rigid, uniform alarm thresholds most systems still rely on, and it shows that transparent, explainable safety copilots are achievable without giving up consistency.
+    \item \textbf{Scalable and accessible deployment.} Centralizing personalization in operator profiles, and surfacing decisions through a supervisor dashboard, gives SAARTHI an edge over fragmented, single-purpose safety hardware---it scales across construction, mining, and manufacturing fleets while closing an accessibility gap those single-purpose devices never addressed. The Explainable AI layer on top of that keeps both operators and supervisors able to trust why any given intervention happened.
+\end{itemize}
+
+\subsection{Limitations and Future Work}
+The framework is a solid starting point, but the design process surfaced a few areas that clearly need more work.
+
+\begin{itemize}
+    \item \textbf{Automatic operator identification.} Right now the system assumes an operator manually selects their profile at shift start---accessibility settings, preferred language, alert preferences, all of it. On a busy or rotating crew, that step gets skipped often enough that the cabin defaults to generic settings that don't actually match whoever's in the seat. Facial recognition for automatic operator identification is the obvious fix: detect who's in the cabin, load their profile---including whatever language settings they've already configured---without requiring a manual login. It closes the gap between what the system is meant to do and what actually happens in practice.
+    \item \textbf{Wearable sensor fusion for fatigue robustness.} The fatigue model currently leans almost entirely on facial-landmark tracking, which struggles under poor cabin lighting, camera occlusion, or when an operator is wearing a dust mask or safety goggles. Bringing in wearable physiological sensors---heart-rate variability bands, EEG headsets---to fuse with the existing vision-based estimate should make the fatigue score noticeably more robust to exactly those failure modes.
+    \item \textbf{Field validation and policy hardening.} So far the reinforcement learning policy has only been trained and tested in simulated, controlled cabin conditions. Real deployment across construction, mining, and manufacturing sites will expose it to dust, vibration, and lighting variability that simulation just doesn't capture well, and that gap needs to be closed before the policy can be trusted at scale. The plan is a supervised Field Calibration phase---collecting real-world incident and near-miss data to refine the XGBoost context model's risk thresholds and retrain the PPO policy under actual operating conditions, while keeping the predefined safety constraints intact throughout.
+\end{itemize}
