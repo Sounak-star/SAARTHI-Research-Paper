@@ -1,0 +1,254 @@
+% !TEX root = ../main.tex
+
+\section{Experimental Setup}
+
+Evaluating SAARTHI meant answering three separate questions: does the detection
+logic work, can it be trusted statistically, and will it actually run on the
+hardware we intend to put in a cab? This section walks through the dataset we
+built on, the protocol we used to synthesize fatigue signatures that do not
+exist in any public corpus, and the cross-validation scheme that keeps the
+reported numbers honest.
+
+\subsection{Dataset Characteristics and Preprocessing}
+We built the evaluation on a tailored subset of the NTHU Driver Drowsiness
+Dataset (NTHU-DDD). Of the candidates we considered, NTHU-DDD came closest to
+the messy reality of a machine cab: a dense collection of operator states
+recorded under genuinely awkward conditions, with the kind of physiological
+variation that laboratory captures tend to iron out. Table
+\ref{tab:dataset_census} gives the census of the subset used for training and
+validation.
+
+The mess is the point. A perfectly lit lab dataset, with facial landmarks
+tracked under ideal conditions, teaches a model very little about shadows,
+head-pose swings, sunglasses, or the plain fact that people's faces differ.
+NTHU-DDD contains all of these, and that variance is what forces the model to
+learn the difference between an ordinary rapid blink and the slower
+physiological drift that marks the onset of fatigue.
+
+\begin{table}[htbp]
+\centering
+\caption{Dataset census. The evaluation drew on a large subset of NTHU-DDD ---
+large enough, in our judgement, to support the statistical claims made in
+Section VI.}
+\label{tab:dataset_census}
+\begin{tabular}{lr}
+\toprule
+\textbf{Metric} & \textbf{Count} \\
+\midrule
+Total Raw EAR Samples (Frames) & 450,194 \\
+Unique Subjects (Operators) & 22 \\
+Distinct Lighting Conditions & 4 \\
+Distinct Temporal Sequences & 465 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{Preprocessing Pipeline}
+Before any features were extracted, the raw video stream went through a
+cleaning pass deliberately kept simple enough for a low-power edge device to
+reproduce. Where facial landmarks dropped out --- a hand passing over the face,
+an extreme head turn --- we forward-filled the gap rather than discard the
+sequence, preserving temporal continuity. The cleaned stream was then cut into
+rolling windows of size $w = 30$, the value fixed by the stability analysis in
+Section IV.
+
+\subsection{Synthetic Hazard Injection Protocol}
+Here we ran into a problem that anyone working in industrial safety will
+recognize: there is no public dataset of labelled fatigue accidents involving
+heavy machinery, and there is no ethical way to produce one --- nobody is going
+to let a drowsy operator keep driving an excavator for the sake of a label. So
+we injected the hazards ourselves, mathematically.
+
+The idea is to take legitimate, alert physiological signals and perturb them
+into micro-sleep and deep-fatigue signatures whose magnitude and duration we
+control exactly. Want a prolonged eye closure, or an erratic head drop? Dial it
+in. The simulation can then model operators at any point along the fatigue
+curve, from barely-detectable early drowsiness to the late stage that precedes
+an accident.
+
+\subsubsection{Track A Injection: Kinematic Violations}
+To exercise the deterministic constraint set $\mathcal{C}_{rules}$, we injected
+violations into 5\% of the test samples:
+\begin{itemize}
+    \item \textbf{Overt Hazards (5\%):} The operator in the data stream stays
+    physiologically alert; it is the machine telemetry that we corrupt, pushing
+    it past predefined safety boundaries --- a sudden acceleration while the
+    boom angle sits beyond its safe operating limit, for instance.
+\end{itemize}
+
+\subsubsection{Track B Injection: Covert Fatigue Onset}
+Testing the XGBoost physiological model called for a subtler adversary: an
+operator who sails through every deterministic Track A check while quietly
+succumbing to micro-behavioural fatigue. Fatigue episodes of this kind are rare
+in continuous industrial work, so we kept the injection rate conservative at
+3\%, split as follows:
+\begin{itemize}
+    \item \textbf{Micro-Sleeps (2\%):} Short but profound eye closures, lasting
+    anywhere from 1.0 to 2.5 seconds.
+    \item \textbf{Physiological Drift (1\%):} A gradual slowing of the blink
+    rate paired with erratic head-pose variation --- the classic early
+    signature of drowsiness.
+\end{itemize}
+
+The perturbed signal $E_{anom}(t)$ comes from a linear transformation of the
+normal baseline EAR signal $E_{norm}(t)$:
+\begin{equation}
+    E_{anom}(t) = (E_{norm}(t) \cdot k_v) + k_o
+\end{equation}
+where $k_v$ scales the variance (droopy eyelid dynamics) and $k_o$ is an
+additive offset (a sustained drop in baseline eye openness).
+
+Real operators do not simply switch from alert to asleep; they fatigue
+progressively, and often try to mask it. To capture that, both parameters are
+driven by a perturbation magnitude $\delta \in [0, 1]$:
+\begin{align}
+    k_v &= 1 - (\delta \cdot \mathcal{U}(0.1, 0.3)) \\
+    k_o &= -\delta \cdot \mathcal{U}(0.05, 0.15)
+\end{align}
+with $\mathcal{U}$ a uniform random distribution. The formulation matters: it
+makes the anomalies degrade the way real physiology degrades, rather than
+adding white noise and calling it fatigue. A high $\delta$ corresponds to
+late-stage drowsiness --- heavy head bobbing, long eye closures --- while a low
+$\delta$ gives the faint early onset that is genuinely hard to catch.
+
+Figure \ref{fig:temporal_distribution} shows where the injected anomalies land
+in time. What stands out in the scatter plot is that fatigue is not a
+continuous state. It arrives in sporadic bursts of micro-sleeps, separated by
+stretches of forced wakefulness of varying length. That pattern is exactly what
+we wanted the simulation to reproduce: a dynamic, non-stationary environment in
+which the critical events are transient.
+
+\subsection{Model Configuration and Hyperparameters}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{figures/temporal_distribution.png}
+\caption{Where the injected hazards fall in time. `Micro-Sleep' bursts (red)
+and gradual `Physiological Drift' segments (purple) stand apart from the
+`Normal' alert baseline (blue), while `Overt Kinematic Hazards' (orange) hide
+inside the normal physiological band --- only the telemetry gives them away.
+Fatigue shows up as distinct, transient clusters rather than continuous
+streams, which is precisely why the $w=30$ sliding window is needed: anything
+longer would smooth these sporadic events out of existence.}
+\label{fig:temporal_distribution}
+\end{figure*}
+
+We tuned the SAARTHI XGBoost classifier by grid search over a subset of clean,
+alert training data. The target was a tight, personalized decision envelope
+that still retains the bulk of normal operational samples --- err too far in
+either direction and the system becomes either deaf to fatigue or unbearable to
+work under. Table \ref{tab:hyperparameters} lists the parameters we settled on.
+
+For the deep learning baselines we used a Denoising Autoencoder (DAE), kept
+deliberately small so the comparison stays fair. The network passes the
+5-dimensional feature vector through an Encoder
+($5 \rightarrow 16 \rightarrow$ Batch Norm (BN) $\rightarrow$ ReLU
+$\rightarrow 8$) and a mirrored Decoder
+($8 \rightarrow 16 \rightarrow$ BN $\rightarrow$ ReLU $\rightarrow 5$).
+
+\subsubsection{Feature Orthogonality Check}
+One question worth settling before training: do the five features actually
+carry independent information, or are we feeding the model the same signal five
+times? Figure \ref{fig:feature_correlation} shows the feature correlation
+matrix.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\columnwidth]{figures/feature_correlation.png}
+\caption{Feature orthogonality. Correlations between the first moment (Mean
+EAR) and the higher-order moments stay low (Kurtosis: $-0.05$, Skewness:
+$-0.21$), so the `shape' statistics are pulling their own weight rather than
+echoing simple eye openness. The gradient-boosted ensemble therefore sees five
+genuinely distinct diagnostic signals, with no multicollinearity to speak of
+(max VIF: 1.16).}
+\label{fig:feature_correlation}
+\end{figure}
+
+To put a number on that independence, we ran a Variance Inflation Factor (VIF)
+analysis. The worst offender was Mean EAR at a VIF of 1.16 --- nowhere near the
+usual trouble threshold of 5.0. Each of the five statistical moments, in other
+words, contributes its own physiological evidence to the XGBoost decision
+boundary rather than restating a neighbour's.
+
+\begin{table}[htbp]
+\centering
+\caption{Simulation parameters and model configuration. The regularization is
+deliberately strict: in a heavy-machinery safety context, a tight physiological
+envelope that minimizes False Negatives is worth far more than a forgiving
+one.}
+\label{tab:hyperparameters}
+\begin{tabular}{llp{3.8cm}}
+\toprule
+\textbf{Category} & \textbf{Parameter} & \textbf{Value / Description} \\
+\midrule
+\textbf{Dataset} & Source & NTHU-DDD \\
+& Window Size ($w$) & 30 samples ($\approx 1.0$ sec) \\
+\midrule
+\textbf{SAARTHI} & Ensemble Size ($T$) & 100 Trees \\
+\textbf{(XGBoost)} & Learning Rate ($\eta$) & 0.1 \\
+& Regularization ($\lambda$) & 1.0 (Strict Outlier Tolerance) \\
+\midrule
+\textbf{Baselines} & Isolation Forest & Contamination=0.05, Trees=100 \\
+& Autoencoder & Latent Dim=8, Epochs=50, LR=0.001 \\
+\midrule
+\textbf{Injection} & Track A Rate & 5\% (Overt Kinematic Hazards) \\
+& Track B Rate & 2\% (Micro-Sleeps), 1\% (Physio. Drift) \\
+& Perturbation ($\delta$) & Varied $[0.0, 1.0]$ for robustness test \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Hardware Feasibility Benchmarking}
+The latency figures reported in Section VI are only as good as their
+reproducibility, so all performance benchmarks were run on a single,
+standardized compute environment, detailed in Table
+\ref{tab:hardware_benchmarks}.
+
+\begin{table}[htbp]
+\centering
+\caption{Hardware benchmarking environment. Latency and memory were profiled on
+the benchmark host, then checked against the resource envelope of the edge
+hardware class the system actually targets.}
+\label{tab:hardware_benchmarks}
+\begin{tabular}{llp{3.4cm}}
+\toprule
+\textbf{Category} & \textbf{Component} & \textbf{Specification} \\
+\midrule
+\textbf{Benchmark} & Processor & Intel Core i5-1135G7 @ 2.40 GHz (4C/8T) \\
+\textbf{Host} & Memory & 16 GB DDR4-3200 \\
+& OS & Windows 11 (64-bit) \\
+& Runtime & Python 3.11, XGBoost 2.0 \\
+\midrule
+\textbf{Target Edge} & SoC Class & ARM Cortex-A72 (Raspberry Pi 4 / Jetson Nano tier) \\
+\textbf{Node} & Memory & 4 GB LPDDR4 \\
+& Accelerator & None (CPU-only inference) \\
+\midrule
+\textbf{Deployed} & Footprint & 188.5 KB (quantized ensemble) \\
+\textbf{Model} & Precision & 8-bit quantized leaf weights \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The question that actually decides deployment, though, is whether the algorithm
+survives on the resource-constrained edge nodes --- Raspberry Pi, the NVIDIA
+Jetson series --- that get installed in machinery cabins. Cloud offloading was
+never an option; the round-trip latency alone would defeat the purpose. SAARTHI
+therefore leans on aggressive model quantization before deployment. The
+compressed XGBoost ensemble measures in at 188.5 KB, which sits so far inside
+the RAM budget of this hardware class that the high-frequency video buffer and
+the CAN bus handlers can run alongside it without contention.
+
+The arithmetic backs this up. Ensemble inference costs
+$\mathcal{O}(T \cdot d)$, with $T$ the number of trees and $d$ the maximum tree
+depth --- a negligible cycle count on any modern edge processor. Whatever
+System-on-Chip an industrial fleet happens to standardize on, SAARTHI is light
+enough to keep its real-time intervention guarantee.
+
+\subsection{Validation Methodology}
+All results were produced under 10-Fold Stratified Cross-Validation with a
+fixed global random seed. Stratification matters here more than usual: hazard
+events are rare by construction, and an unstratified split can hand a lazy
+classifier an inflated accuracy score simply by starving some folds of
+positives. Partitioning so that the Alert-Baseline-to-Fatigued/Hazardous ratio
+stays constant across folds closes that loophole. Every metric reported in this
+paper is the mean over 10 independent simulation runs.
