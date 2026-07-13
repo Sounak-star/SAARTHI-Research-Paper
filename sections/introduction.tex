@@ -1,3 +1,33 @@
 \section{Introduction}
+\label{sec:introduction}
 
-Write the introduction here.
+The construction and industrial manufacturing sectors are highly hazardous environments where rigorous safety monitoring is critical to preventing accidents. Workers constantly operate in close proximity to heavy machinery and dynamic spatial obstacles, making consistent and safe reactions to traffic and machinery hazards a major challenge. A significant, yet often overlooked, issue in modern safety monitoring is alarm fatigue; repeated exposure to static or continuous alarm patterns causes workers to become desensitized, thereby drastically reducing their vigilance and responsiveness to actual hazards over time \cite{lu2025reinforcement}. 
+
+Operator impairment, specifically drowsiness, further compromises worksite safety. Drowsiness induced by sleep deprivation results in microsleeping and prolonged eyelid closures, both of which are critical early indicators of fatigue that lead to fatal misjudgments. Modern computer vision systems have proven highly effective at identifying these states by monitoring facial landmarks to compute the percentage of eyelid closure and estimating three-dimensional head poses \cite{owen2025drowsiness}. Concurrently, deep learning architectures like the You Only Look Once (YOLO) algorithm are widely utilized to rapidly and accurately detect external targets—such as workers and personal protective equipment—within complex, heavily occluded industrial scenes \cite{chen2023yolo}.
+
+However, the reality is that worksite hazards are compound events, whereas existing safety systems operate in single-modality silos. A cabin camera capable of tracking a driver's facial landmarks remains entirely unaware of an external worker standing in the machine's blind spot. Conversely, a robust YOLO-based object detector cannot determine if the machine operator is falling asleep. When human operators and supervisors are forced to mentally fuse these independent alerts on the fly, reaction times plummet. Furthermore, addressing alarm desensitization requires non-stationary, adaptive control rather than fixed thresholds. Reinforcement Learning (RL) has shown significant promise in this domain, as RL agents can dynamically adjust alarm attributes based on specific reward functions to ensure safe and consistent hazard reactions \cite{lu2025reinforcement}. 
+
+To integrate these disjointed technologies into a cohesive framework, this paper introduces Saarthi: a personalized, real-time AI safety copilot built for heavy-machinery operators facing multi-hazard risks. By fusing YOLO-based external hazard detection, facial landmark-based fatigue monitoring, and RL-driven adaptive interventions into a centralized Hybrid Decision Engine, the system anticipates and mitigates accidents proactively.
+
+\subsection{Novelty}
+\label{subsec:novelty}
+
+The novelty of the proposed Saarthi system in terms of adaptive, multi-modal industrial safety is presented as follows:
+
+\begin{itemize}
+    \item A \textbf{Hybrid Decision Engine}: Fuses external visual intelligence via YOLO models for spatial object detection with internal physiological monitoring using facial landmarks and eye closure metrics. This linkage catches complex, compound hazards that standalone detectors completely miss.
+    \item A dynamic \textbf{Contextual Risk Engine}: Adjusts baseline safety scores using a trained XGBoost Regressor. It factors in real-world operational variables like shift timing, weather, machine type, and the operator's specific experience level.
+    \item An \textbf{Adaptive Intervention Logic}: Powered by a Proximal Policy Optimization (PPO) Reinforcement Learning model. Because fixed rules for alarm delivery fail in non-stationary environments and directly contribute to desensitization, this RL agent learns the optimal timing and intensity of interventions to prevent alarm fatigue.
+    \item An \textbf{accessibility-first User Interface (UI)}: Dynamically shifts alert modalities based on operator profiles. It swaps standard audio alarms for haptic overlays (for hearing-impaired users) or high-contrast visuals, ensuring personalized safety delivery without compromising the underlying RL safety constraints.
+\end{itemize}
+
+\subsection{Contribution}
+\label{subsec:contribution}
+
+These contributions to multi-hazard operator safety and fatigue monitoring are as follows:
+
+\begin{itemize}
+    \item \textbf{Multi-modal risk fusion}: We engineered a concurrent processing pipeline that seamlessly aggregates high-frequency facial landmark tracking, real-time object detection, and vehicle telemetry into a single, cohesive safety score.
+    \item \textbf{Balancing safety and personalization}: We deployed a constrained RL policy that dynamically adjusts alarm attributes—combating alarm fatigue while preserving safe worker reactions—by enforcing strict safety boundaries against individual operator profiles.
+    \item \textbf{Scalable and accessible deployment}: We built a high-performance, asynchronous FastAPI backend capable of handling intense parallel CPU loads without lagging the operator's real-time dashboard, demonstrating that advanced AI safety tools can scale inclusively across large industrial fleets.
+\end{itemize}

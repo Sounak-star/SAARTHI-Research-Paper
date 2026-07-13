@@ -8,7 +8,21 @@
 \usepackage{booktabs}
 \usepackage{multirow}
 \usepackage{url}
+\usepackage{xcolor} 
+\usepackage{cuted} % Required to make the abstract full-width
 
+% Define a lighter, standard hyperlink blue
+\definecolor{hyperblue}{rgb}{0.0, 0.4, 0.8}
+
+\usepackage{hyperref}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=hyperblue,
+    filecolor=magenta,      
+    urlcolor=hyperblue,
+    citecolor=hyperblue,
+    breaklinks=true 
+}
 % -------------------- Hyphenation --------------------
 \hyphenation{op-tical net-works semi-conduc-tor}
 
@@ -26,7 +40,7 @@
 
 \author{
 Sounak~Chowdhury,
-Member~2,
+Noel~Binu,
 Member~3,
 Member~4,
 Member~5
@@ -35,24 +49,10 @@ Member~5
 \maketitle
 
 % =====================================================
-% Abstract
+% Abstract & Keywords (Full Width)
 % =====================================================
 
 \input{sections/abstract}
-
-% =====================================================
-% Keywords
-% =====================================================
-
-\begin{IEEEkeywords}
-Industrial Safety,
-Computer Vision,
-YOLOv8,
-Excavator,
-Hazard Detection,
-Edge AI,
-Large Language Models
-\end{IEEEkeywords}
 
 % =====================================================
 % Main Sections
@@ -75,17 +75,10 @@ Large Language Models
 \input{sections/conclusion}
 
 % =====================================================
-% Acknowledgement (Optional)
-% =====================================================
-
-%\section*{Acknowledgment}
-%The authors would like to thank ...
-
-% =====================================================
 % References
 % =====================================================
 
 \bibliographystyle{IEEEtran}
-\bibliography{bibtex/IEEEexample}
+\bibliography{reference}
 
 \end{document}
