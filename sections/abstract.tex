@@ -1,0 +1,11 @@
+\begin{strip}
+\vspace{-1.2cm} % Pulls the abstract up closer to the authors
+
+\noindent\textbf{\textit{Abstract}---Keeping heavy machinery operators safe is difficult because most collision and fatigue monitors work in total isolation. A cabin camera doesn't know what is in the vehicle's blind spot, and proximity sensors cannot tell if a driver is falling asleep. Because these older systems rely on fixed, hard-coded rules, they generate constant false alarms on busy worksites. Eventually, operators just stop paying attention to them altogether. We built SAARTHI to solve this disconnect. It is a personalized AI copilot that fuses different safety feeds into a single Hybrid Decision Engine. The system actively combines spatial hazard tracking via YOLO, physiological data from MediaPipe, and raw machine telemetry. To evaluate the actual danger of a situation, an XGBoost-driven Contextual Risk Engine adjusts the baseline score based on weather, shift timing, and operator experience. Instead of relying on a static siren, intervention decisions are handled by a Proximal Policy Optimization (PPO) reinforcement learning model. The agent learns exactly when and how to alert the operator without causing alarm fatigue. We also built the interface to adapt automatically to the person in the seat, swapping standard audio for haptic feedback or high-contrast visuals based on their specific profile. Hosted on an asynchronous FastAPI backend, the architecture proves that multi-modal, highly personalized safety constraints can run in real time across industrial fleets without lagging.}
+
+\vspace{0.3cm}
+
+\noindent\textbf{\textit{Index Terms}---Industrial Safety, Computer Vision, YOLOv8, Excavator, Hazard Detection, Edge AI, Large Language Models.}
+
+\vspace{0.6cm} % Adds breathing room before the Introduction starts
+\end{strip}
