@@ -66,15 +66,34 @@ in. The simulation can then model operators at any point along the fatigue
 curve, from barely-detectable early drowsiness to the late stage that precedes
 an accident.
 
-\subsubsection{Track A Injection: Kinematic Violations}
-To exercise the deterministic constraint set $\mathcal{C}_{rules}$, we injected
-violations into 5\% of the test samples:
+\subsubsection{Track A Injection: Overt Kinematic Violations}
+Track A deals in hazards the machine itself can report: a boom arm pushed past
+its safe operating angle, a travel-speed violation mid-slew, a cab tilted
+beyond its stability limit. None of this correlates with the operator's
+physiology --- the EAR signal stays untouched --- yet each event demands an
+immediate, deterministic response.
+
+We simulate three normalised CAN-bus sensor channels:
 \begin{itemize}
-    \item \textbf{Overt Hazards (5\%):} The operator in the data stream stays
-    physiologically alert; it is the machine telemetry that we corrupt, pushing
-    it past predefined safety boundaries --- a sudden acceleration while the
-    boom angle sits beyond its safe operating limit, for instance.
+    \item \textbf{$s_0$: Boom Angle} (threshold $> 0.85$)
+    \item \textbf{$s_1$: Travel Speed} (threshold $> 0.90$)
+    \item \textbf{$s_2$: Cab Tilt} (threshold $> 0.80$)
 \end{itemize}
+In normal operation each channel behaves as $s_c \sim
+\mathcal{N}(\mu_c^{\text{safe}}, \sigma_c^2)$, with the safe means held a full
+three standard deviations below the alarm thresholds; during a violation
+event, at least one channel is driven past its limit. Every channel also
+carries Gaussian ADC noise ($\sigma_{\text{noise}} = 0.02$) --- the
+quantisation artefacts and vibration-induced jitter that a sensor bolted to a
+working excavator cannot avoid.
+
+Violations enter at a $5\%$ window-level rate, which works out to roughly two
+non-overlapping events per 1{,}000-frame session, each spanning $w = 30$
+frames. Detection is deliberately unglamorous: the rule takes the mean sensor
+reading across the window and fires if any channel mean clears its threshold.
+That $w$-frame averaging is a standard debounce --- it shrugs off
+single-sample ADC glitches while still guaranteeing a detection latency of at
+most one window.
 
 \subsubsection{Track B Injection: Covert Fatigue Onset}
 Testing the XGBoost physiological model called for a subtler adversary: an
@@ -112,24 +131,29 @@ late-stage drowsiness --- heavy head bobbing, long eye closures --- while a low
 $\delta$ gives the faint early onset that is genuinely hard to catch.
 
 Figure \ref{fig:temporal_distribution} shows where the injected anomalies land
-in time. What stands out in the scatter plot is that fatigue is not a
-continuous state. It arrives in sporadic bursts of micro-sleeps, separated by
-stretches of forced wakefulness of varying length. That pattern is exactly what
-we wanted the simulation to reproduce: a dynamic, non-stationary environment in
-which the critical events are transient.
+in time, over the first twelve sessions of the actual evaluation stream. Two
+regimes are visible at once. Micro-sleeps arrive as short, sharp bursts ---
+profound EAR depressions that come and go within a couple of seconds --- while
+the drift segments stretch out far longer, dragging the baseline downward for
+sustained periods. Because every frame touched by a perturbation is labelled
+anomalous, this drift coverage is also what produces the high window-level
+anomaly rate ($\approx 88.8\%$) that the class-imbalance analysis in
+Section~VII has to contend with. The environment the classifier faces is, by
+construction, dynamic and non-stationary.
 
 \subsection{Model Configuration and Hyperparameters}
 
 \begin{figure*}[t]
 \centering
 \includegraphics[width=\textwidth]{figures/temporal_distribution.png}
-\caption{Where the injected hazards fall in time. `Micro-Sleep' bursts (red)
-and gradual `Physiological Drift' segments (purple) stand apart from the
-`Normal' alert baseline (blue), while `Overt Kinematic Hazards' (orange) hide
-inside the normal physiological band --- only the telemetry gives them away.
-Fatigue shows up as distinct, transient clusters rather than continuous
-streams, which is precisely why the $w=30$ sliding window is needed: anything
-longer would smooth these sporadic events out of existence.}
+\caption{Temporal distribution of injected hazards over the first twelve
+sessions of the evaluation stream (12{,}000 frames, $\delta = 0.5$,
+\texttt{SEED=42}). `Micro-Sleep' bursts (red) appear as short, transient EAR
+depressions, while `Physiological Drift' segments (purple) suppress the
+baseline over sustained stretches; the `Normal' alert baseline (blue) sits
+above both. The transient character of the micro-sleep events is why the
+$w=30$ sliding window matters: a longer window would smooth these short
+bursts out of existence.}
 \label{fig:temporal_distribution}
 \end{figure*}
 
@@ -155,20 +179,20 @@ matrix.
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=\columnwidth]{figures/feature_correlation.png}
-\caption{Feature orthogonality. Correlations between the first moment (Mean
-EAR) and the higher-order moments stay low (Kurtosis: $-0.05$, Skewness:
-$-0.21$), so the `shape' statistics are pulling their own weight rather than
-echoing simple eye openness. The gradient-boosted ensemble therefore sees five
-genuinely distinct diagnostic signals, with no multicollinearity to speak of
-(max VIF: 1.16).}
+\caption{Feature orthogonality (computed from the full 451{,}515-window
+dataset, SEED = 42). The largest off-diagonal correlation is
+$r = -0.44$ between Std.\ Dev.\ and Skewness; all remaining pairs
+stay below $|r| = 0.35$. No two features carry the same
+physiological information.}
 \label{fig:feature_correlation}
 \end{figure}
 
 To put a number on that independence, we ran a Variance Inflation Factor (VIF)
-analysis. The worst offender was Mean EAR at a VIF of 1.16 --- nowhere near the
-usual trouble threshold of 5.0. Each of the five statistical moments, in other
-words, contributes its own physiological evidence to the XGBoost decision
-boundary rather than restating a neighbour's.
+analysis. The worst offender was Skewness at a VIF of 1.46 --- well within the
+acceptable range below the standard trouble threshold of 5.0 (individual VIFs:
+Mean EAR 1.14, Std.\ Dev.\ 1.27, $E_{roc}$ 1.04, Skewness 1.46, Kurtosis 1.03).
+Each of the five statistical moments therefore contributes its own physiological
+evidence to the XGBoost decision boundary rather than restating a neighbour's.
 
 \begin{table}[htbp]
 \centering
@@ -206,43 +230,44 @@ standardized compute environment, detailed in Table
 
 \begin{table}[htbp]
 \centering
-\caption{Hardware benchmarking environment. Latency and memory were profiled on
-the benchmark host, then checked against the resource envelope of the edge
-hardware class the system actually targets.}
+\caption{Hardware benchmarking environment. All latency and memory figures
+were measured directly on the benchmark host using 
+\texttt{run\_experiment.py} (SEED = 42).}
 \label{tab:hardware_benchmarks}
 \begin{tabular}{llp{3.4cm}}
 \toprule
 \textbf{Category} & \textbf{Component} & \textbf{Specification} \\
 \midrule
-\textbf{Benchmark} & Processor & Intel Core i5-1135G7 @ 2.40 GHz (4C/8T) \\
-\textbf{Host} & Memory & 16 GB DDR4-3200 \\
-& OS & Windows 11 (64-bit) \\
-& Runtime & Python 3.11, XGBoost 2.0 \\
+\textbf{Benchmark} & Processor & Intel Core Ultra 5 125U, 12C/14T @ 3.60 GHz \\
+\textbf{Host} & Memory & 15.7 GB RAM \\
+& OS & Windows 10 (Build 26200) \\
+& Runtime & Python 3.11.9, XGBoost 3.0.2 \\
 \midrule
 \textbf{Target Edge} & SoC Class & ARM Cortex-A72 (Raspberry Pi 4 / Jetson Nano tier) \\
 \textbf{Node} & Memory & 4 GB LPDDR4 \\
 & Accelerator & None (CPU-only inference) \\
 \midrule
-\textbf{Deployed} & Footprint & 188.5 KB (quantized ensemble) \\
-\textbf{Model} & Precision & 8-bit quantized leaf weights \\
+\textbf{Deployed} & Footprint & 165.75 KB (pickle) / 206.79 KB (JSON) \\
+\textbf{Model} & Inf.\ Latency & 0.55 ms mean, 0.98 ms p99 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The question that actually decides deployment, though, is whether the algorithm
-survives on the resource-constrained edge nodes --- Raspberry Pi, the NVIDIA
-Jetson series --- that get installed in machinery cabins. Cloud offloading was
-never an option; the round-trip latency alone would defeat the purpose. SAARTHI
-therefore leans on aggressive model quantization before deployment. The
-compressed XGBoost ensemble measures in at 188.5 KB, which sits so far inside
-the RAM budget of this hardware class that the high-frequency video buffer and
-the CAN bus handlers can run alongside it without contention.
+The question that actually decides deployment is whether the algorithm survives
+on the resource-constrained edge nodes --- Raspberry Pi, the NVIDIA Jetson
+series --- that get installed in machinery cabins. Cloud offloading was never an
+option; the round-trip latency alone would defeat the purpose. The serialized
+XGBoost ensemble occupies 165.75 KB in pickle format (206.79 KB as a portable
+JSON booster), measured directly on the benchmark host. Both figures sit well
+inside the RAM budget of this hardware class, leaving sufficient headroom for
+the concurrent high-frequency video buffer and the CAN bus handlers.
 
-The arithmetic backs this up. Ensemble inference costs
-$\mathcal{O}(T \cdot d)$, with $T$ the number of trees and $d$ the maximum tree
-depth --- a negligible cycle count on any modern edge processor. Whatever
-System-on-Chip an industrial fleet happens to standardize on, SAARTHI is light
-enough to keep its real-time intervention guarantee.
+The inference cost is equally manageable. On the benchmark host (Intel Core
+Ultra 5 125U), a single 5-feature inference call completes in 0.55 ms on average
+($p_{99} = 0.98$ ms). This is two orders of magnitude below the
+$T_{\text{human}} \approx 250$ ms human reaction threshold, confirming that
+SAARTHI's decision pipeline will never become the bottleneck in the intervention
+chain regardless of the edge SoC deployed by the fleet.
 
 \subsection{Validation Methodology}
 All results were produced under 10-Fold Stratified Cross-Validation with a

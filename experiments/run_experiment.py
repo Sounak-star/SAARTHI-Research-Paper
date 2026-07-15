@@ -43,6 +43,7 @@ warnings.filterwarnings("ignore")
 SEED        = 42
 WINDOW_SIZE = 30
 N_FOLDS     = 10
+INJECT_A    = 0.05        # Track A: overt kinematic violation rate
 INJECT_B_MS = 0.02
 INJECT_B_PD = 0.01
 
@@ -166,6 +167,143 @@ def inject(ear, delta=0.5):
         perturb(s, dur, kv, ko)
 
     return p, L
+
+
+# ── 4b. TRACK A INJECTION AND EVALUATION ────────────────────────────────────
+# Track A models overt kinematic violations: a telemetry flag fires whenever
+# a machine safety boundary is crossed (e.g. boom overextension during
+# reverse). The EAR signal is NOT perturbed — the operator is physiologically
+# alert — only the binary kinematic_flag is set to 1.
+
+def inject_track_a(n_frames, inject_rate=INJECT_A):
+    """
+    Returns a binary kinematic_flag array (1 = violation, 0 = safe).
+    inject_rate is applied at the WINDOW level, not per frame:
+      n_events = round(n_windows * inject_rate / WINDOW_SIZE)
+    Each event spans one full window (WINDOW_SIZE frames) so the
+    window-averaged rule fires reliably.
+    """
+    flags    = np.zeros(n_frames, dtype=int)
+    n_wins   = max(1, n_frames - WINDOW_SIZE + 1)
+    # How many non-overlapping violation blocks to inject
+    n_events = max(1, round(n_wins * inject_rate / WINDOW_SIZE))
+    # Sample non-overlapping start positions
+    max_pos  = n_frames - WINDOW_SIZE
+    step     = max(WINDOW_SIZE, max_pos // max(n_events, 1))
+    positions = np.arange(0, max_pos, step)[:n_events]
+    for pos in positions:
+        flags[int(pos): int(pos) + WINDOW_SIZE] = 1
+    return flags
+
+
+# Track A uses CAN-bus telemetry signals, not EAR.
+# We simulate 3 kinematic sensor channels with additive Gaussian noise:
+#   ch0: boom_angle   (normalised 0-1, threshold > 0.85)
+#   ch1: travel_speed (normalised 0-1, threshold > 0.90)
+#   ch2: cab_tilt_deg (normalised 0-1, threshold > 0.80)
+#
+# A violation window has at least one channel driven past its safety limit.
+# Sensor noise ~ N(0, 0.02) models ADC quantisation + vibration artefacts.
+
+TRACK_A_SENSOR_NOISE   = 0.02
+TRACK_A_THRESHOLDS     = np.array([0.85, 0.90, 0.80])   # per-channel limits
+TRACK_A_SENSOR_SIGMA   = np.array([0.30, 0.25, 0.20])   # typical safe-op std
+
+
+def simulate_kinematic_sensors(n_frames, flags):
+    """
+    Returns (n_frames, 3) sensor matrix.
+    Normal frames: sensor ~ N(mu_safe, sigma_safe)  -- well below threshold.
+    Violation frames: at least one channel pushed above its threshold.
+    """
+    rng = np.random.default_rng(SEED)
+    mu_safe    = TRACK_A_THRESHOLDS - 3 * TRACK_A_SENSOR_SIGMA  # safely below
+    sensors    = rng.normal(loc=mu_safe, scale=TRACK_A_SENSOR_SIGMA,
+                            size=(n_frames, 3))
+    sensors    = np.clip(sensors, 0.0, 1.0)
+
+    # Inject violation: push a random channel above its threshold
+    viol_idx   = np.where(flags == 1)[0]
+    # Group contiguous violation frames and push entire windows above threshold
+    processed = set()
+    for idx in viol_idx:
+        if idx in processed:
+            continue
+        ch = rng.integers(0, 3)
+        # Push the entire window starting at idx above threshold
+        end = min(idx + WINDOW_SIZE, n_frames)
+        sensors[idx:end, ch] = TRACK_A_THRESHOLDS[ch] + rng.uniform(0.02, 0.15)
+        for k in range(idx, end):
+            processed.add(k)
+
+    # Add sensor noise
+    sensors += rng.normal(0, TRACK_A_SENSOR_NOISE, size=sensors.shape)
+    return np.clip(sensors, 0.0, 1.0)
+
+
+def track_a_rule(sensor_window):
+    """
+    O(1) deterministic threshold check on a (WINDOW_SIZE, 3) sensor window.
+    Fires if the *mean* of any channel across the window exceeds its limit.
+    Averaging suppresses single-frame ADC glitches (standard debounce logic).
+    """
+    mean_reading = sensor_window.mean(axis=0)          # shape (3,)
+    return int(np.any(mean_reading > TRACK_A_THRESHOLDS))
+
+
+def evaluate_track_a(ear_sequences):
+    """
+    Evaluates Track A on the full sequence set.
+    Each sequence gets fresh Track A violations + sensor simulation.
+    Returns precision, recall, FPR, F1, latency stats.
+    """
+    import time
+    all_yt, all_yp = [], []
+    latencies = []
+
+    for seq in ear_sequences:
+        n      = len(seq)
+        flags  = inject_track_a(n)
+        sensor = simulate_kinematic_sensors(n, flags)
+
+        for i in range(n - WINDOW_SIZE + 1):
+            # A window is a violation if ANY frame in it is flagged
+            label = int(np.any(flags[i: i + WINDOW_SIZE]))
+            sw    = sensor[i: i + WINDOW_SIZE]          # (30, 3)
+
+            t0 = time.perf_counter()
+            pred = track_a_rule(sw)
+            latencies.append((time.perf_counter() - t0) * 1000)
+
+            all_yt.append(label)
+            all_yp.append(pred)
+
+    yt = np.array(all_yt)
+    yp = np.array(all_yp)
+
+    tp = int(np.sum((yp == 1) & (yt == 1)))
+    fp = int(np.sum((yp == 1) & (yt == 0)))
+    fn = int(np.sum((yp == 0) & (yt == 1)))
+    tn = int(np.sum((yp == 0) & (yt == 0)))
+
+    precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+    recall    = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+    fpr       = fp / (fp + tn) if (fp + tn) > 0 else 0.0
+    f1        = (2 * precision * recall / (precision + recall)
+                 if (precision + recall) > 0 else 0.0)
+
+    return {
+        "precision":        round(precision, 4),
+        "recall":           round(recall, 4),
+        "fpr":              round(fpr, 4),
+        "f1":               round(f1, 4),
+        "latency_mean_ms":  round(float(np.mean(latencies)), 5),
+        "latency_p99_ms":   round(float(np.percentile(latencies, 99)), 5),
+        "tp": tp, "fp": fp, "fn": fn, "tn": tn,
+        "inject_rate":       INJECT_A,
+        "sensor_noise_sigma": TRACK_A_SENSOR_NOISE,
+        "thresholds":         TRACK_A_THRESHOLDS.tolist(),
+    }
 
 # ── 5. MODELS ────────────────────────────────────────────────────────────────
 def make_xgb():
@@ -341,6 +479,15 @@ def main():
         r = results[name]
         print(f"      F1={r['F1'][0]:.4f}  AUC={r['AUC'][0]:.4f}  MCC={r['MCC'][0]:.4f}")
 
+    # 3b. Track A evaluation
+    print("[3b] Evaluating Track A deterministic rule-check...")
+    track_a_stats = evaluate_track_a(seqs)
+    print(f"      Precision={track_a_stats['precision']:.4f}  "
+          f"Recall={track_a_stats['recall']:.4f}  "
+          f"FPR={track_a_stats['fpr']:.4f}  "
+          f"F1={track_a_stats['f1']:.4f}  "
+          f"Latency={track_a_stats['latency_mean_ms']:.5f}ms")
+
     # 4. SHAP
     print("[4/7] SHAP analysis...")
     sp = int(len(X_all) * 0.8)
@@ -408,6 +555,7 @@ def main():
             "best_model": best, "vs_model": nbest,
         },
         "delta_sensitivity": {str(k): v for k,v in sweep.items()},
+        "track_a": track_a_stats,
     }
 
     out = OUT_DIR / "saarthi_results.json"
@@ -442,6 +590,15 @@ def main():
     print("="*60)
     print(f"\n  Full JSON: {out.resolve()}")
     print(f"  Figures:   {FIG_DIR.resolve()}")
+    print()
+    print("  -- Track A (Deterministic Rule-Check) --")
+    print(f"  Precision={track_a_stats['precision']}  Recall={track_a_stats['recall']}  "
+          f"FPR={track_a_stats['fpr']}  F1={track_a_stats['f1']}")
+    print(f"  Latency: mean={track_a_stats['latency_mean_ms']}ms  "
+          f"p99={track_a_stats['latency_p99_ms']}ms")
+    print(f"  Inject rate={track_a_stats['inject_rate']}  "
+          f"Noise sigma={track_a_stats['sensor_noise_sigma']}  "
+          f"Thresholds={track_a_stats['thresholds']}")
 
 if __name__ == "__main__":
     main()

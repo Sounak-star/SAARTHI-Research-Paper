@@ -197,5 +197,49 @@
       "f1_noise": 0.968,
       "delta_f1": -0.003
     }
+  },
+  "track_a": {
+    "precision": 1.0,
+    "recall": 0.1573,
+    "fpr": 0.0,
+    "f1": 0.2718,
+    "latency_mean_ms": 0.00657,
+    "latency_p99_ms": 0.0181,
+    "tp": 6510,
+    "fp": 0,
+    "fn": 34875,
+    "tn": 410130,
+    "inject_rate": 0.05,
+    "sensor_noise_sigma": 0.02,
+    "thresholds": [0.85, 0.9, 0.8]
+  },
+  "hardware_benchmarks": {
+    "host": {
+      "cpu": "Intel Core Ultra 5 125U, 12C/14T @ 3.60 GHz",
+      "ram_gb": 15.7,
+      "os": "Windows 10 (Build 26200)",
+      "python": "3.11.9",
+      "xgboost": "3.0.2"
+    },
+    "model_footprint": {
+      "pickle_kb": 165.75,
+      "json_booster_kb": 206.79
+    },
+    "inference_latency": {
+      "mean_ms": 0.55,
+      "p99_ms": 0.98
+    },
+    "target_edge": {
+      "soc_class": "ARM Cortex-A72 (Raspberry Pi 4 / Jetson Nano tier)",
+      "ram_gb": 4,
+      "accelerator": "None (CPU-only)"
+    }
+  },
+  "vif_scores": {
+    "Mean EAR": 1.14,
+    "Std Dev": 1.27,
+    "Rate of Change (E_roc)": 1.04,
+    "Skewness": 1.46,
+    "Kurtosis": 1.03
   }
 }
