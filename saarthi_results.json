@@ -1,0 +1,201 @@
+{
+  "dataset": {
+    "n_sequences": 465,
+    "total_windows": 451515,
+    "anomaly_rate": 0.8876,
+    "window_size": 30
+  },
+  "comparative_metrics": {
+    "Naive (Threshold)": {
+      "Acc": {
+        "mean": 0.6085,
+        "std": 0.0022
+      },
+      "F1": {
+        "mean": 0.7194,
+        "std": 0.0021
+      },
+      "MCC": {
+        "mean": 0.3256,
+        "std": 0.0026
+      },
+      "AUC": {
+        "mean": 0.8844,
+        "std": 0.0023
+      },
+      "AP": {
+        "mean": 0.9829,
+        "std": 0.0004
+      }
+    },
+    "Hybrid (Isol. Forest)": {
+      "Acc": {
+        "mean": 0.2484,
+        "std": 0.0167
+      },
+      "F1": {
+        "mean": 0.2732,
+        "std": 0.0277
+      },
+      "MCC": {
+        "mean": 0.0974,
+        "std": 0.0135
+      },
+      "AUC": {
+        "mean": 0.7323,
+        "std": 0.0087
+      },
+      "AP": {
+        "mean": 0.9467,
+        "std": 0.0026
+      }
+    },
+    "Hybrid (Autoencoder)": {
+      "Acc": {
+        "mean": 0.6031,
+        "std": 0.0174
+      },
+      "F1": {
+        "mean": 0.7141,
+        "std": 0.0163
+      },
+      "MCC": {
+        "mean": 0.3217,
+        "std": 0.0131
+      },
+      "AUC": {
+        "mean": 0.7835,
+        "std": 0.0212
+      },
+      "AP": {
+        "mean": 0.9699,
+        "std": 0.0029
+      }
+    },
+    "SAARTHI (XGBoost)": {
+      "Acc": {
+        "mean": 0.9135,
+        "std": 0.0012
+      },
+      "F1": {
+        "mean": 0.9523,
+        "std": 0.0007
+      },
+      "MCC": {
+        "mean": 0.5051,
+        "std": 0.0075
+      },
+      "AUC": {
+        "mean": 0.9319,
+        "std": 0.0015
+      },
+      "AP": {
+        "mean": 0.9909,
+        "std": 0.0002
+      }
+    }
+  },
+  "confusion_matrices": {
+    "Naive (Threshold)": [
+      [
+        48229,
+        2541
+      ],
+      [
+        174206,
+        226539
+      ]
+    ],
+    "Hybrid (Isol. Forest)": [
+      [
+        48242,
+        2528
+      ],
+      [
+        336824,
+        63921
+      ]
+    ],
+    "Hybrid (Autoencoder)": [
+      [
+        48216,
+        2554
+      ],
+      [
+        176674,
+        224071
+      ]
+    ],
+    "SAARTHI (XGBoost)": [
+      [
+        22779,
+        27991
+      ],
+      [
+        11067,
+        389678
+      ]
+    ]
+  },
+  "shap_ranking": [
+    {
+      "feature": "Mean EAR (\u03bc)",
+      "mean_abs_shap": 2.66579
+    },
+    {
+      "feature": "Std Dev (\u03c3)",
+      "mean_abs_shap": 0.82747
+    },
+    {
+      "feature": "Rate of Change (E_roc)",
+      "mean_abs_shap": 0.43829
+    },
+    {
+      "feature": "Skewness (Sk)",
+      "mean_abs_shap": 0.27083
+    },
+    {
+      "feature": "Kurtosis (Ku)",
+      "mean_abs_shap": 0.08968
+    }
+  ],
+  "feature_stats": {
+    "kurtosis_p90_normal": 2.958,
+    "kurtosis_p90_anomaly": 2.106
+  },
+  "max_off_diagonal_correlation": 0.4411,
+  "significance": {
+    "friedman_chi2": 27.12,
+    "friedman_p": 6e-06,
+    "wilcoxon_p": 0.001953,
+    "best_model": "SAARTHI (XGBoost)",
+    "vs_model": "Naive (Threshold)"
+  },
+  "delta_sensitivity": {
+    "0.1": {
+      "f1_clean": 0.952,
+      "f1_noise": 0.944,
+      "delta_f1": -0.008
+    },
+    "0.3": {
+      "f1_clean": 0.947,
+      "f1_noise": 0.944,
+      "delta_f1": -0.003
+    },
+    "0.5": {
+      "f1_clean": 0.96,
+      "f1_noise": 0.955,
+      "delta_f1": -0.004
+    },
+    "0.7": {
+      "f1_clean": 0.966,
+      "f1_noise": 0.963,
+      "delta_f1": -0.004
+    },
+    "0.9": {
+      "f1_clean": 0.971,
+      "f1_noise": 0.968,
+      "delta_f1": -0.003
+    }
+  }
+}

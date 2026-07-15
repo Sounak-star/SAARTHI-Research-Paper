@@ -9,6 +9,18 @@
 \usepackage{multirow}
 \usepackage{url}
 \usepackage[ruled,vlined]{algorithm2e}
+\usepackage{placeins}
+
+% -------------------- Float placement tuning --------------------
+% Let pages carry more floats so figures stay inside their sections
+\setcounter{topnumber}{4}
+\setcounter{dbltopnumber}{2}
+\setcounter{totalnumber}{6}
+\renewcommand{\topfraction}{0.9}
+\renewcommand{\dbltopfraction}{0.9}
+\renewcommand{\textfraction}{0.05}
+\renewcommand{\floatpagefraction}{0.75}
+\renewcommand{\dblfloatpagefraction}{0.75}
 \usepackage{xcolor}
 \usepackage{cuted}
 
