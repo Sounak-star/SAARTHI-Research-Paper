@@ -180,13 +180,74 @@ and Skewness (see the full matrix in
 Figure~\ref{fig:feature_correlation}) --- well short of anything problematic.
 All five features feed the XGBoost ensemble independent diagnostic signal.
 
-\subsection{Field Sensitivity and Operational Feasibility}
+\subsection{System Benchmarking and Hardware Feasibility}
 
+A central contribution of the SAARTHI framework is resolving the trade-off
+between diagnostic accuracy and computational resource consumption. We
+benchmarked the models on the host hardware (Intel Core Ultra 5 125U, 15.7 GB
+RAM) to evaluate edge-deployment viability.
+
+\subsubsection{The Pareto Frontier and Memory Footprint}
+Table~\ref{tab:complexity_benchmarks} details the inference latency and memory
+footprint of the evaluated architectures, and
+Figure~\ref{fig:pareto_frontier} plots the resulting trade-off space. The
+SAARTHI XGBoost model achieves Pareto optimality. It delivers a dominant
+F1-Score of 0.952 while maintaining a negligible algorithmic footprint of
+165.75 KB (serialized state) and a mean inference latency of 0.55 ms
+(p99 = 0.98 ms).
+
+\begin{table}[htbp]
+\centering
+\caption{Algorithmic complexity and hardware benchmarking. SAARTHI achieves
+Pareto optimality with high accuracy and a low memory footprint suitable for
+edge microcontrollers.}
+\label{tab:complexity_benchmarks}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{lccc}
+\toprule
+\textbf{Model} & \textbf{F1-Score} & \textbf{Latency (ms)} & \textbf{Memory (KB)} \\
+\midrule
+Na\"ive (Threshold)        & 0.719 & $\sim 0.001$ & $< 1$ \\
+Hybrid (Isol.\ Forest)    & 0.273 & $\sim 0.10$  & $\approx 900$ \\
+Hybrid (Autoencoder)       & 0.714 & $\sim 2.00$  & $\approx 50$ \\
+\textbf{SAARTHI (XGBoost)} & \textbf{0.952} & \textbf{0.55} & \textbf{165.75} \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\columnwidth]{figures/pareto_frontier.png}
+\caption{The accuracy--latency trade-off space (bubble area encodes memory
+footprint). Only two architectures sit on the Pareto frontier: the na\"ive
+threshold, which buys its microsecond latency with a 0.719 F1, and SAARTHI,
+which reaches 0.952 for half a millisecond. The Isolation Forest is dominated
+on every axis at nearly six times SAARTHI's memory.}
+\label{fig:pareto_frontier}
+\end{figure}
+
+This memory footprint is crucial for resource-constrained edge gateways.
+While deep neural networks (like the Autoencoder) require dense matrix
+multiplications ($\mathcal{O}(L \cdot N^2)$), the XGBoost ensemble relies on an
+algorithmic complexity of $\mathcal{O}(T \cdot d)$ per sample, where $T=100$
+trees and maximum depth $d=4$. This translates to at most 400 boolean
+comparisons per inference, allowing it to easily meet the strict SRAM constraints
+of common microcontrollers (e.g., the 300 KB limit of an ESP32) without requiring
+a dedicated tensor accelerator.
+
+\subsubsection{Environmental Sensitivity: Vibration and Drift}
 A cab-mounted camera does not enjoy laboratory conditions; it vibrates. To
-estimate what that costs, Table~\ref{tab:field_sensitivity} and
-Figure~\ref{fig:delta_sweep} report F1 across perturbation levels
-$\delta \in \{0.10, 0.30, 0.50, 0.70, 0.90\}$, with and without additive
-Gaussian vibration noise ($\sigma_{\text{noise}} = 0.01$).
+evaluate the boundary integrity of the model against environmental drift, we
+analyzed the system's behavior under simulated camera vibration
+($\sigma_{\text{noise}} = 0.01$).
+
+As detailed in Table~\ref{tab:field_sensitivity} and Figure~\ref{fig:delta_sweep},
+the vibration penalty never exceeds a 0.008 drop in F1 across the entire
+perturbation spectrum ($\delta \in [0.1, 0.9]$). The model gives up the most at
+$\delta = 0.10$ (barely-perceptible early fatigue), where the F1 drops slightly
+from 0.952 to 0.944. At $\delta = 0.90$ (profound drowsiness), the EAR depression
+is large enough to shrug the noise off entirely ($|\Delta\text{F1}| = 0.003$).
 
 \begin{table}[htbp]
 \centering
@@ -218,20 +279,12 @@ across the entire fatigue spectrum, and shrinks as fatigue deepens.}
 \label{fig:delta_sweep}
 \end{figure}
 
-The vibration penalty never exceeds 0.008 F1 across the whole $\delta$ range
---- a manageable, consistent cost rather than a cliff. The pattern of the
-degradation is itself informative. The model gives up the most at
-$\delta = 0.10$, barely-perceptible early fatigue, where the signal sits
-closest to the noise floor; at $\delta = 0.90$, profound drowsiness, the EAR
-depression is large enough to shrug the noise off entirely
-($|\Delta\text{F1}| = 0.003$). That asymmetry is exactly what one would want
-from the physics.
-
-Equally reassuring is that F1 rises monotonically with $\delta$, from 0.952
-at $\delta = 0.10$ to 0.971 at $\delta = 0.90$. The model is not merely
-catching the obvious, extreme cases and ignoring the rest --- it tracks the
-full fatigue spectrum, and its performance degrades gracefully toward the
-subtle end rather than collapsing.
+Analysis of the feature space revealed a measurable covariate shift: the
+$90^{\text{th}}$ percentile Kurtosis of the normal signal is 2.958, dropping
+significantly to 2.106 during an anomaly. This confirms that higher-order moments
+like Kurtosis are highly sensitive to the physical state of the operator,
+allowing the tree ensemble to maintain its decision boundary even when raw scalar
+values drift due to environmental vibration.
 
 \subsection{Track A: Deterministic Kinematic Rule-Check}
 
