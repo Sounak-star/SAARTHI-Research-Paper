@@ -1,0 +1,17 @@
+\section*{Author Contributions}
+
+The SAARTHI framework was developed across two complementary subsystems: an in-cabin module that monitors operator fatigue and explains its alerts, and a worksite module that simulates hazards, learns adaptive intervention timing, and scores contextual risk. The individual contributions are as follows:
+
+\textbf{Noel Binu} led the data and feature engineering for the operator-monitoring module. He built the MediaPipe-based facial-landmark pipeline over the UTA-RLDD and YawDD datasets to compute the temporal fatigue metrics (EAR, PERCLOS, MAR/yawn ratio, blink rate, and head pose) and applied SMOTE balancing to produce the training-ready tabular feature set. He additionally implemented the YOLO-based object-detection module for worker and blind-spot proximity awareness.
+
+\textbf{Sounak Chowdhury} led the model development and explainability for the operator-monitoring module. He trained the lightweight XGBoost fatigue classifier, integrated SHAP (TreeExplainer) to generate the real-time ``Reason Card'' alert justifications, and built the live webcam inference loop that overlays alert levels and explanations at edge-capable frame rates.
+
+\textbf{Soham Chakraborty} led the simulation environment for the worksite module. He developed the custom Gymnasium-based worksite simulator that replays real excavator telemetry, injects drowsiness and blind-spot hazards at data-driven frequencies, and enforces the deterministic hard-safety rules that trigger the highest-tier emergency response.
+
+\textbf{Sharvari Santosh Mahurkar} led the reinforcement learning and intervention policy for the worksite module. She designed the reward-shaping function, implemented the rule-based adaptive-threshold fallback, and trained the PPO policy that optimizes early-warning intervention timing under bounded soft-alert constraints.
+
+\textbf{Onkar Chalekar} led the data-risk and context modeling for the worksite module. He analyzed the OSHA Severe Injury Reports to derive hazard baseline frequencies for the simulator and trained the contextual-risk XGBoost model that produces the supervisor ``Context Risk Badges'' from operational features.
+
+\textbf{Kumaran K} supervised the research, providing overall guidance on the methodology, system design, and direction of the study.
+
+All authors reviewed and approved the final manuscript.
